@@ -78,7 +78,7 @@ int open_socket(char* server_name, int server_port)
 
     hostent = gethostbyname(server_name); // lookup IP
     if (hostent == NULL) {
-        perror("ERROR: gethostbyname");
+        perror("ERROR: Failed to get host by name");
         exit(1);
     }
 
@@ -94,7 +94,7 @@ int open_socket(char* server_name, int server_port)
 #else
     if ((fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
 #endif
-        perror("ERROR: socket");
+        perror("ERROR: Failed to open socket");
         exit(1);
     }
 
@@ -107,7 +107,7 @@ int open_socket(char* server_name, int server_port)
         if (errno == ECONNREFUSED) {
             return -1;
         }
-        perror("ERROR: connect");
+        perror("ERROR: Failed to connect to server");
         exit(1);
     }
 #endif
@@ -122,7 +122,7 @@ static BOOL mask_match(char* pattern, const char* str)
     char* pos = strchr(str, '=');
 
     if (pos == NULL) {
-        printf("ERROR: environment variable %s format invalid\n", str);
+        printf("ERROR: Invalid environment variable %s\n", str);
         exit(1);
     }
     *pos = '\0';
@@ -169,7 +169,7 @@ void send_header(int fd, int argc, char** argv, char* cookie)
     buf_printf(&read_buf, "%s: ", HEADER_KEY_CURRENT_WORKING_DIR);
     char* cwd = getcwd(path_buffer, MAXPATHLEN);
     if (cwd == NULL) {
-        perror("ERROR: getcwd");
+        perror("ERROR: Failed to get cwd");
         exit(1);
     }
 
@@ -186,7 +186,7 @@ void send_header(int fd, int argc, char** argv, char* cookie)
             // "+5" is a extra space for '=' padding and NULL as the end of string
             encoded_ptr = malloc(sizeof(char) * strlen(argv[i]) * 1.5 + 5);
             if (encoded_ptr == NULL) {
-                perror("ERROR: failed to malloc");
+                perror("ERROR: Failed to malloc");
                 exit(1);
             }
             encoded_work = encoded_ptr; // copy for free
@@ -230,11 +230,11 @@ static void read_header(char* buf, struct header_t* header)
     // key
     char* p = strtok(buf, " :");
     if (p == NULL) {
-        fprintf(stderr, "ERROR: key is NULL\n");
+        fprintf(stderr, "ERROR: Key is NULL\n");
         exit(1);
     }
     if (strlen(p) > MAX_HEADER_KEY_LEN) {
-        fprintf(stderr, "ERROR: key \"%s\" is too long\n", p);
+        fprintf(stderr, "ERROR: Key \"%s\" is too long\n", p);
         exit(1);
     }
     int i;
@@ -243,12 +243,12 @@ static void read_header(char* buf, struct header_t* header)
             exit(0);
         }
         if (isspace(p[i])) {
-            // if invoked "groovyclient" without arguments, it should works
+            // if invoked without arguments, it should works
             // as error message command and print usage by delegated groovy command
             return;
         }
         if (!isalnum(p[i])) {
-            fprintf(stderr, "ERROR: key \"%s\" is invalid: %x\n", p, p[i]);
+            fprintf(stderr, "ERROR: Key \"%s\" is invalid: %x\n", p, p[i]);
             exit(1);
         }
     }
@@ -257,14 +257,14 @@ static void read_header(char* buf, struct header_t* header)
     // value
     p = strtok(NULL, "\n");
     if (p == NULL) {
-        fprintf(stderr, "ERROR: value of key \"%s\" is NULL: %s\n", header->key, p);
+        fprintf(stderr, "ERROR: Value of key \"%s\" is NULL: %s\n", header->key, p);
         exit(1);
     }
     while (isspace(*p)) { // ignore spaces
         p++;
     }
     if (strlen(p) > MAX_HEADER_VALUE_LEN) {
-        fprintf(stderr, "ERROR: value of key \"%s\" is too long: %s\n", header->key, p);
+        fprintf(stderr, "ERROR: Value of key \"%s\" is too long: %s\n", header->key, p);
         exit(1);
     }
     strncpy(header->value, p, MAX_HEADER_VALUE_LEN);
@@ -279,7 +279,7 @@ static char* read_line(int fd, char* buf, int size)
 #ifdef WINDOWS
          int ret = recv(fd, buf + i, 1, 0);
          if (ret == -1) {
-             fprintf(stderr, "ERROR: failed to read line: %d\n", WSAGetLastError());
+             fprintf(stderr, "ERROR: Failed to read line: %d\n", WSAGetLastError());
              exit(1);
          }
          if (ret != 1) {
@@ -324,7 +324,7 @@ int read_headers(int fd, struct header_t headers[])
         }
         read_header(read_buf, headers + pos);
         if (pos > MAX_HEADER) {
-            fprintf(stderr, "ERROR: too many headers\n");
+            fprintf(stderr, "ERROR: Too many headers\n");
             exit(1);
         }
         pos++;
@@ -359,7 +359,7 @@ static int split_socket_output(int soc, char* stream_identifier, int size)
         output_fd = fileno(stderr);
     }
     else {
-        fprintf(stderr, "ERROR: unrecognizable stream identifier: %s\n", stream_identifier);
+        fprintf(stderr, "ERROR: Unrecognizable stream identifier: %s\n", stream_identifier);
         exit(1);
     }
 
@@ -394,7 +394,7 @@ static int send_to_server(int fd)
     int ret;
 
     if ((ret = read(fileno(stdin), read_buf, BUFFER_SIZE)) == -1){ // TODO buffering
-        perror("ERROR: failed to read from stdin");
+        perror("ERROR: Failed to read from stdin");
         exit(1);
     }
     read_buf[ret] = '\0';
@@ -450,12 +450,12 @@ int start_session(int fd)
         // Dispatch data from server to stdout/err.
         char* sid = find_header(headers, HEADER_KEY_CHANNEL, size);
         if (sid == NULL) {
-            fprintf(stderr, "ERROR: required header %s not found\n", HEADER_KEY_CHANNEL);
+            fprintf(stderr, "ERROR: Required header %s not found\n", HEADER_KEY_CHANNEL);
             return 1;
         }
         char* chunk_size = find_header(headers, HEADER_KEY_SIZE, size);
         if (chunk_size == NULL) {
-            fprintf(stderr, "ERROR: required header %s not found\n", HEADER_KEY_SIZE);
+            fprintf(stderr, "ERROR: Required header %s not found\n", HEADER_KEY_SIZE);
             return 1;
         }
         if (split_socket_output(fd, sid, atoi(chunk_size)) == EOF) {
@@ -487,11 +487,11 @@ int start_session(int fd)
         FD_SET(0, &read_set);
         FD_SET(fd, &read_set);
         if ((ret = select(FD_SETSIZE, &read_set, (fd_set*)NULL, (fd_set*)NULL, NULL)) == -1) {
-            perror("ERROR: select failure");
+            perror("ERROR: Failed to select");
             exit(1);
         }
         if (ret == 0) {
-            fprintf(stderr, "ERROR: timeout?\n");
+            fprintf(stderr, "ERROR: Timeout\n");
             continue;
         }
 
@@ -515,13 +515,13 @@ int start_session(int fd)
             // Dispatch data from server to stdout/err.
             char* sid = find_header(headers, HEADER_KEY_CHANNEL, size);
             if (sid == NULL) {
-                fprintf(stderr, "ERROR: required header %s not found\n", HEADER_KEY_CHANNEL);
+                fprintf(stderr, "ERROR: Required header %s not found\n", HEADER_KEY_CHANNEL);
                 return 1;
             }
 
             char* chunk_size = find_header(headers, HEADER_KEY_SIZE, size);
             if (chunk_size == NULL) {
-                fprintf(stderr, "ERROR: required header %s not found\n", HEADER_KEY_SIZE);
+                fprintf(stderr, "ERROR: Required header %s not found\n", HEADER_KEY_SIZE);
                 return 1;
             }
             if (split_socket_output(fd, sid, atoi(chunk_size)) == EOF) {

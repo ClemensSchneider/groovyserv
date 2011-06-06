@@ -47,7 +47,10 @@
       <directory>src/main/bin</directory>
       <outputDirectory>bin</outputDirectory>
       <includes>
+        <include>groovyclient</include>
+        <include>groovyclient.bat</include>
         <include>groovyclient.rb</include>
+        <include>gscommon</include>
       </includes>
       <directoryMode>755</directoryMode>
       <fileMode>755</fileMode>
@@ -56,8 +59,8 @@
       <directory>target</directory>
       <outputDirectory>bin</outputDirectory>
       <includes>
-        <include>groovyclient</include>
-        <include>groovyclient.exe</include>
+        <include>gsconnector</include>
+        <include>gsconnector.exe</include>
       </includes>
       <directoryMode>755</directoryMode>
       <fileMode>755</fileMode>

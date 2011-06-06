@@ -1,0 +1,127 @@
+#!/bin/sh
+#
+# Copyright 2009-2011 the original author or authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# ------------------------------------------
+# Common preparation
+# ------------------------------------------
+
+QUIET=true
+. `dirname $0`/gscommon
+QUIET=false
+
+# ------------------------------------------
+# Local helper function
+# ------------------------------------------
+
+function usage() {
+    cat << EOS_usage
+usage: `basename $0` -C[option for groovyclient] [args/options for groovy]
+options:
+  -Ch,-Chelp                       show this usage
+  -Cp,-Cport <port>                specify the port to connect to groovyserver
+  -Ck,-Ckill-server                kill the running groovyserver
+  -Cr,-Crestart-server             restart the running groovyserver
+  -Cv,-Cverbose                    verbose output to the log file at groovyserver
+  -Cq,-Cquiet                      suppress statring messages
+  -Cenv <substr>                   pass environment variables of which a name
+                                   includes specified substr
+  -Cenv-all                        pass all environment variables
+  -Cenv-exclude <substr>           don't pass environment variables of which a
+                                   name includes specified substr
+EOS_usage
+}
+
+function call_groovyserver() {
+    info_log "Invoking server: $GROOVYSERVER_BIN $@"
+    "$GROOVYSERVER_BIN" "$@"
+    if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to invoke groovyserver from groovyclient." >&2
+        exit 1
+    fi
+}
+
+#-------------------------------------------
+# Parse arguments
+#-------------------------------------------
+
+for arg in "$@" ; do
+    case "$arg" in
+        -Ch | -Chelp)
+            usage
+            exit 1
+            ;;
+        -Cv | -Cverbose)
+            GROOVYSERVER_ARGS="$GROOVYSERVER_ARGS -v"
+            ;;
+        -Cq | -Cquiet)
+            GROOVYSERVER_ARGS="$GROOVYSERVER_ARGS -q"
+            QUIET=true
+            ;;
+        -Cp | -Cport)
+            GROOVYSERVER_ARGS="$GROOVYSERVER_ARGS -p $arg"
+            ;;
+        -Ck | -Ckill-server)
+            GROOVYSERVER_ARGS="$GROOVYSERVER_ARGS -k"
+            GROOVYSERVER_KILL=true
+            ;;
+        -Cr | -Crestart-server)
+            GROOVYSERVER_ARGS="$GROOVYSERVER_ARGS -r"
+            GROOVYSERVER_RESTART=true
+            ;;
+        *)
+            # Unused -C* options are passed to the gsconnector,
+            # and then they are used or ignored appropriately.
+            ;;
+    esac
+done
+
+# ------------------------------------------
+# Control groovyserver
+# ------------------------------------------
+
+if [ $GROOVYSERVER_KILL ]; then
+    call_groovyserver $GROOVYSERVER_ARGS
+    exit 0
+
+elif [ $GROOVYSERVER_RESTART ]; then
+    call_groovyserver $GROOVYSERVER_ARGS
+
+else
+    # Start groovyserver if it's down
+    $IS_SERVER_AVAILABLE > /dev/null 2>&1
+    if [ ! $? -eq 0 ]; then
+        call_groovyserver
+    fi
+fi
+
+#-------------------------------------------
+# Check cookie
+#-------------------------------------------
+
+if [ ! -f "$GROOVYSERV_COOKIE_FILE" ]; then
+    error_log "ERROR: Not found a cookie file: $GROOVYSERV_COOKIE_FILE"
+    exit 1
+fi
+GROOVYSERV_COOKIE=`cat $GROOVYSERV_COOKIE_FILE`
+
+#-------------------------------------------
+# Request to server
+#-------------------------------------------
+
+export GROOVYSERV_COOKIE="$GROOVYSERV_COOKIE"
+"$GSCONNECTOR_BIN" "$@"
+

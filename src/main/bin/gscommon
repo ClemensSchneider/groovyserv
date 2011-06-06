@@ -1,0 +1,200 @@
+#!/bin/sh
+#
+# Copyright 2009-2011 the original author or authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#-------------------------------------------
+# OS specific support
+#-------------------------------------------
+
+OS_CYGWIN=false
+OS_MSYS=false
+OS_DARWIN=false
+case "`uname`" in
+  CYGWIN* )
+    OS_CYGWIN=true
+    ;;
+  Darwin* )
+    OS_DARWIN=true
+    ;;
+  MINGW* )
+    OS_MSYS=true
+    ;;
+esac
+
+# For Cygwin, ensure paths are in UNIX format before anything is touched.
+# When they are used by Groovy, Groovy's script will convert them appropriately.
+if $OS_CYGWIN; then
+    GROOVY_HOME=`cygpath --unix --ignore "$GROOVY_HOME"`
+    GROOVYSERV_HOME=`cygpath --unix --ignore "$GROOVYSERV_HOME"`
+    CLASSPATH=`cygpath --unix --ignore --path "$CLASSPATH"`
+
+    # TODO Original Groovy's shell scirpt uses only HOME instead of USERPROFILE.
+    # In GroovyServ, let it be in order to unify the work directory for both cygwin and BAT.
+    HOME=`cygpath --unix --ignore "$USERPROFILE"`
+fi
+
+#-------------------------------------------
+# Common function
+#-------------------------------------------
+
+error_log() {
+    local message="$1"
+    /bin/echo "$message" 1>&2
+}
+
+info_log() {
+    local message="$1"
+    if [ "$QUIET" != "true" ]; then
+        /bin/echo "$message" 1>&2
+    fi
+}
+
+resolve_symlink() {
+    local target=$1
+
+    # if target is symbolic link
+    if [ -L $target ]; then
+        local original_filepath=`readlink $target`
+
+        # if original is specified as absolute path
+        if [ $(echo $original_filepath | cut -c 1) = "/" ]; then
+            echo "$original_filepath"
+        else
+            echo "$(dirname $target)/$original_filepath"
+        fi
+    else
+        echo "$target"
+    fi
+}
+
+expand_path() {
+    local target=$1
+    if [ -d "$target" ]; then
+        echo $(cd $target && pwd -P)
+    elif [ -f "$target" ]; then
+        local target_resolved=$(resolve_symlink $target)
+        local filename=$(basename $target_resolved)
+        local dir_expanded="$(expand_path $(dirname $target_resolved))"
+        echo "$dir_expanded/$filename"
+    else
+        echo "$target"
+    fi
+}
+
+function escape_only_value() {
+    local target="$1"
+    local firstchar=`echo "$target" | sed -e 's/^\(.\).*$/\1/' 2>/dev/null`
+    if [ "$firstchar" = "-" ]; then
+        echo "$target"
+    else
+        echo "\"$target\""
+    fi
+}
+
+#-------------------------------------------
+# Find groovy command
+#-------------------------------------------
+
+if [ "$GROOVY_HOME" != "" ]; then
+    info_log "Groovy home directory: $GROOVY_HOME"
+    GROOVY_BIN="$GROOVY_HOME/bin/groovy"
+    if [ ! -x "$GROOVY_BIN" ]; then
+        error_log "ERROR: Not found a groovy command in GROOVY_HOME: $GROOVY_BIN"
+        exit 1
+    fi
+    info_log "Groovy command path: $GROOVY_BIN (found at GROOVY_HOME)"
+elif which groovy >/dev/null 2>&1; then
+    info_log "Groovy home directory: (none)"
+    GROOVY_BIN=`which groovy`
+    info_log "Groovy command path: $GROOVY_BIN (found at PATH)"
+else
+    error_log "ERROR: Not found a groovy command. Required either PATH having groovy command or GROOVY_HOME"
+    exit 1
+fi
+
+#-------------------------------------------
+# Resolve GROOVYSERV_HOME
+#-------------------------------------------
+
+if [ "$GROOVYSERV_HOME" = "" ]; then
+    GROOVYSERV_HOME="$(dirname $(dirname $(expand_path $0)))"
+
+    # for Homebrew in Mac OS X
+    if [ -d $GROOVYSERV_HOME/libexec ]; then
+        GROOVYSERV_HOME="$GROOVYSERV_HOME/libexec"
+    fi
+else
+    GROOVYSERV_HOME=`expand_path "$GROOVYSERV_HOME"`
+fi
+ls $GROOVYSERV_HOME/lib/groovyserv-*.jar >/dev/null 2>&1
+if [ ! $? -eq 0 ]; then
+    error_log "ERROR: Not found a valid GROOVYSERV_HOME directory: $GROOVYSERV_HOME"
+    exit 1
+fi
+info_log "GroovyServ home directory: $GROOVYSERV_HOME"
+
+#-------------------------------------------
+# Find groovyserver command
+#-------------------------------------------
+
+GROOVYSERVER_BIN="$GROOVYSERV_HOME/bin/groovyserver"
+if [ ! -x "$GROOVYSERVER_BIN" ]; then
+    error_log "ERROR: Not found a groovyserver command in GROOVYSERV_HOME: $GROOVYSERVER_BIN"
+    exit 1
+fi
+
+#-------------------------------------------
+# Find groovyclient command
+#-------------------------------------------
+
+GROOVYCLIENT_BIN="$GROOVYSERV_HOME/bin/groovyclient"
+if [ ! -x "$GROOVYCLIENT_BIN" ]; then
+    error_log "ERROR: Not found a groovyclient command in GROOVYSERV_HOME: $GROOVYCLIENT_BIN"
+    exit 1
+fi
+
+#-------------------------------------------
+# Find gsconnector command
+#-------------------------------------------
+
+GSCONNECTOR_BIN="$GROOVYSERV_HOME/bin/gsconnector"
+if [ ! -x "$GSCONNECTOR_BIN" ]; then
+    error_log "ERROR: Not found a gsconnector command in GROOVYSERV_HOME: $GSCONNECTOR_BIN"
+    exit 1
+fi
+GROOVYCLIENTAGENT_BIN="$GROOVYSERV_HOME/bin/groovyclient"
+
+# ------------------------------------------
+# GroovyServ's work directory
+# ------------------------------------------
+
+GROOVYSERV_WORK_DIR="$HOME/.groovy/groovyserv"
+if [ ! -d "$GROOVYSERV_WORK_DIR" ]; then
+    mkdir -p "$GROOVYSERV_WORK_DIR"
+fi
+info_log "GroovyServ work directory: $GROOVYSERV_WORK_DIR"
+
+#-------------------------------------------
+# Port and PID and Cookie
+#-------------------------------------------
+
+PORT=${GROOVYSERVER_PORT:-1961}
+GROOVYSERV_OPTS="$GROOVYSERV_OPTS -Dgroovyserver.port=$PORT"
+GROOVYSERV_PID_FILE="$GROOVYSERV_WORK_DIR/pid-$PORT"
+IS_SERVER_AVAILABLE="env GROOVYSERVER_PORT=$PORT $GSCONNECTOR_BIN -Cwithout-invoking-server"
+EXPIRED_PID_FILE="( cd \"$GROOVYSERV_WORK_DIR\" && find . -name pid-$PORT -mmin +1 )"
+GROOVYSERV_COOKIE_FILE="$GROOVYSERV_WORK_DIR/cookie-$PORT"
+

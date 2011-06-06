@@ -15,36 +15,21 @@
 # limitations under the License.
 #
 
-#-------------------------------------------
-# OS specific support
-#-------------------------------------------
+# ------------------------------------------
+# Local helper function
+# ------------------------------------------
 
-OS_CYGWIN=false
-OS_MSYS=false
-OS_DARWIN=false
-case "`uname`" in
-  CYGWIN* )
-    OS_CYGWIN=true
-    ;;
-  Darwin* )
-    OS_DARWIN=true
-    ;;
-  MINGW* )
-    OS_MSYS=true
-    ;;
-esac
-
-# For Cygwin, ensure paths are in UNIX format before anything is touched.
-# When they are used by Groovy, Groovy's script will convert them appropriately.
-if $OS_CYGWIN; then
-    GROOVY_HOME=`cygpath --unix --ignore "$GROOVY_HOME"`
-    GROOVYSERV_HOME=`cygpath --unix --ignore "$GROOVYSERV_HOME"`
-    CLASSPATH=`cygpath --unix --ignore --path "$CLASSPATH"`
-
-    # TODO Original Groovy's shell scirpt uses only HOME instead of USERPROFILE.
-    # In GroovyServ, let it be in order to unify the work directory for both cygwin and BAT.
-    HOME=`cygpath --unix --ignore "$USERPROFILE"`
-fi
+function usage() {
+    cat << EOS_usage
+usage: `basename $0` [options]
+options:
+  -v         verbose output to the log file
+  -q         suppress starting messages
+  -k         kill the running groovyserver
+  -r         restart the running groovyserver
+  -p <port>  specify the port to listen
+EOS_usage
+}
 
 #-------------------------------------------
 # Parse arguments
@@ -74,141 +59,20 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         *)
-            echo "usage: `basename $0` [options]"
-            echo "options:"
-            echo "  -v         verbose output to the log file"
-            echo "  -q         suppress starting messages"
-            echo "  -k         kill the running groovyserver"
-            echo "  -r         restart the running groovyserver"
-            echo "  -p <port>  specify the port to listen"
+            usage
             exit 1
             ;;
     esac
 done
 
 #-------------------------------------------
-# Common function
+# Common preparation
 #-------------------------------------------
 
-error_log() {
-    local MESSAGE="$1"
-    /bin/echo "$MESSAGE" 1>&2
-}
-
-info_log() {
-    local MESSAGE="$1"
-    if [ ! $QUIET ]; then
-        /bin/echo "$MESSAGE" 1>&2
-    fi
-}
-
-resolve_symlink() {
-    local TARGET=$1
-
-    # if target is symbolic link
-    if [ -L $TARGET ]; then
-        local ORIGINAL_FILEPATH=`readlink $TARGET`
-
-        # if original is specified as absolute path
-        if [ $(echo $ORIGINAL_FILEPATH | cut -c 1) = "/" ]; then
-            echo "$ORIGINAL_FILEPATH"
-        else
-            echo "$(dirname $TARGET)/$ORIGINAL_FILEPATH"
-        fi
-    else
-        echo "$TARGET"
-    fi
-}
-
-expand_path() {
-    local TARGET=$1
-    if [ -d "$TARGET" ]; then
-        echo $(cd $TARGET && pwd -P)
-    elif [ -f "$TARGET" ]; then
-        local TARGET_RESOLVED=$(resolve_symlink $TARGET)
-        local FILENAME=$(basename $TARGET_RESOLVED)
-        local DIR_EXPANDED="$(expand_path $(dirname $TARGET_RESOLVED))"
-        echo "$DIR_EXPANDED/$FILENAME"
-    else
-        echo "$TARGET"
-    fi
-}
+. `dirname $0`/gscommon
 
 #-------------------------------------------
-# Find groovy command
-#-------------------------------------------
-
-if [ "$GROOVY_HOME" != "" ]; then
-    info_log "Groovy home directory: $GROOVY_HOME"
-    GROOVY_BIN="$GROOVY_HOME/bin/groovy"
-    if [ ! -x "$GROOVY_BIN" ]; then
-        error_log "ERROR: Not found a groovy command in GROOVY_HOME: $GROOVY_BIN"
-        exit 1
-    fi
-    info_log "Groovy command path: $GROOVY_BIN (found at GROOVY_HOME)"
-elif which groovy >/dev/null 2>&1; then
-    info_log "Groovy home directory: (none)"
-    GROOVY_BIN=`which groovy`
-    info_log "Groovy command path: $GROOVY_BIN (found at PATH)"
-else
-    error_log "ERROR: Not found a groovy command. Required either PATH having groovy command or GROOVY_HOME"
-    exit 1
-fi
-
-#-------------------------------------------
-# Resolve GROOVYSERV_HOME
-#-------------------------------------------
-
-if [ "$GROOVYSERV_HOME" = "" ]; then
-    GROOVYSERV_HOME="$(dirname $(dirname $(expand_path $0)))"
-
-    # for Homebrew in Mac OS X
-    if [ -d $GROOVYSERV_HOME/libexec ]; then
-        GROOVYSERV_HOME="$GROOVYSERV_HOME/libexec"
-    fi
-else
-    GROOVYSERV_HOME=`expand_path "$GROOVYSERV_HOME"`
-fi
-ls $GROOVYSERV_HOME/lib/groovyserv-*.jar >/dev/null 2>&1
-if [ ! $? -eq 0 ]; then
-    error_log "ERROR: Not found a valid GROOVYSERV_HOME directory: $GROOVYSERV_HOME"
-    exit 1
-fi
-info_log "GroovyServ home directory: $GROOVYSERV_HOME"
-
-#-------------------------------------------
-# Find groovyclient command
-#-------------------------------------------
-
-GROOVYCLIENT_BIN="$GROOVYSERV_HOME/bin/groovyclient"
-if [ ! -x "$GROOVYCLIENT_BIN" ]; then
-    error_log "ERROR: Not found a groovyclient command in GROOVYSERV_HOME: $GROOVYCLIENT_BIN"
-    exit 1
-fi
-
-# ------------------------------------------
-# GroovyServ's work directory
-# ------------------------------------------
-
-GROOVYSERV_WORK_DIR="$HOME/.groovy/groovyserv"
-if [ ! -d "$GROOVYSERV_WORK_DIR" ]; then
-    mkdir -p "$GROOVYSERV_WORK_DIR"
-fi
-info_log "GroovyServ work directory: $GROOVYSERV_WORK_DIR"
-
-#-------------------------------------------
-# Port and PID and Cookie
-#-------------------------------------------
-
-PORT=${GROOVYSERVER_PORT:-1961}
-GROOVYSERV_OPTS="$GROOVYSERV_OPTS -Dgroovyserver.port=$PORT"
-GROOVYSERV_PID_FILE="$GROOVYSERV_WORK_DIR/pid-$PORT"
-GROOVYSERV_COOKIE_FILE="$GROOVYSERV_WORK_DIR/cookie-$PORT"
-IS_SERVER_AVAILABLE="env GROOVYSERVER_PORT=$PORT $GROOVYCLIENT_BIN -Cwithout-invoking-server -e \"\""
-EXPIRED_PID_FILE="( cd \"$GROOVYSERV_WORK_DIR\" && find . -name pid-$PORT -mmin +1 )"
-
-#-------------------------------------------
-# Setup classpath
+# Setup classpath for groovyserver
 #-------------------------------------------
 
 info_log "Original classpath: ${CLASSPATH:-(none)}"
@@ -305,12 +169,12 @@ fi
 # Wait for available
 #-------------------------------------------
 
-if [ ! $QUIET ]; then
+if [ "$QUIET" != "true" ]; then
     /bin/echo -n "Starting" 1>&2
 fi
 
 while true; do
-    if [ ! $QUIET ]; then
+    if [ "$QUIET" != "true" ]; then
         /bin/echo -n "." 1>&2
     fi
     sleep 1

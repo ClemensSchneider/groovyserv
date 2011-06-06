@@ -28,78 +28,23 @@ struct option_info_t option_info[] = {
     { "without-invoking-server", OPT_WITHOUT_INVOCATION_SERVER, FALSE },
     { "p", OPT_PORT, TRUE },
     { "port", OPT_PORT, TRUE },
-    { "k", OPT_KILL_SERVER, FALSE },
-    { "kill-server", OPT_KILL_SERVER, FALSE },
-    { "r", OPT_RESTART_SERVER, FALSE },
-    { "restart-server", OPT_RESTART_SERVER, FALSE },
     { "env", OPT_ENV, TRUE },
     { "env-all", OPT_ENV_ALL, FALSE },
     { "env-exclude", OPT_ENV_EXCLUDE, TRUE },
-    { "q", OPT_QUIET, FALSE },
-    { "quiet", OPT_QUIET, FALSE },
-    { "help", OPT_HELP, FALSE },
-    { "h", OPT_HELP, FALSE },
-    { "", OPT_HELP, FALSE },
 };
 
 struct option_t client_option = {
     FALSE,
     PORT_NOT_SPECIFIED, // if -Cp not specified.
     FALSE,
-    FALSE,
-    FALSE,
-    FALSE,
     {}, // each array elements are expected to be filled with NULLs
-    {}, // each array elements are expected to be filled with NULLs
-    FALSE,
+    {}  // each array elements are expected to be filled with NULLs
 };
-
-static char *groovy_help_options[] = {
-    "--help",
-    "-help",
-    "-h"
-};
-
-void usage()
-{
-    printf("\n"
-           "usage: groovyclient %s[option for groovyclient] [args/options for groovy]\n" \
-           "options:\n" \
-           "  %sh,%shelp                       show this usage\n" \
-           "  %sp,%sport <port>                specify the port to connect to groovyserver\n" \
-           "  %sk,%skill-server                kill the running groovyserver\n" \
-           "  %sr,%srestart-server             restart the running groovyserver\n" \
-           "  %sq,%squiet                      suppress statring messages\n" \
-           "  %senv <substr>                   pass environment variables of which a name\n" \
-           "                                   includes specified substr\n" \
-           "  %senv-all                        pass all environment variables\n" \
-           "  %senv-exclude <substr>           don't pass environment variables of which a\n" \
-           "                                   name includes specified substr\n" \
-           ""
-           , CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX
-           , CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX
-           , CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX
-           , CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX
-           , CLIENT_OPTION_PREFIX, CLIENT_OPTION_PREFIX
-        );
-}
 
 static BOOL is_client_option(char* s)
 {
     return strncmp(s, CLIENT_OPTION_PREFIX,
                    strlen(CLIENT_OPTION_PREFIX)) == 0;
-}
-
-static BOOL is_groovy_help_option(char* s)
-{
-    char** p;
-    for (p = groovy_help_options;
-         (p-groovy_help_options) < sizeof(groovy_help_options)/sizeof(groovy_help_options[0]); p++) {
-        if (strcmp(*p, s) == 0) {
-            return TRUE;
-        }
-    }
-    return FALSE;
 }
 
 static void set_mask_option(char ** env_mask, char* opt, char* value)
@@ -109,8 +54,7 @@ static void set_mask_option(char ** env_mask, char* opt, char* value)
         ;
     }
     if (p-env_mask == MAX_MASK) {
-        fprintf(stderr, "ERROR: too many option: %s %s\n", opt, value);
-        usage();
+        fprintf(stderr, "ERROR: Too many option: %s %s\n", opt, value);
         exit(1);
     }
     *p = value;
@@ -131,32 +75,24 @@ void scan_options(struct option_t* option, int argc, char **argv)
 {
     int i;
     if (argc <= 1) {
-            option->help = TRUE;
-            return;
+        return;
     }
     for (i = 1; i < argc; i++) {
-        if (is_groovy_help_option(argv[i])) {
-            option->help = TRUE;
-            return;
-        }
-
         if (is_client_option(argv[i])) {
-            char* name = argv[i]+strlen(CLIENT_OPTION_PREFIX);
+            char* name = argv[i] + strlen(CLIENT_OPTION_PREFIX);
             char* argvi_copy = argv[i];
             argv[i] = NULL;
             struct option_info_t* opt = what_option(name);
 
             if (opt == NULL) {
-                fprintf(stderr, "ERROR: unknown option %s\n", argvi_copy);
-                usage();
-                exit(1);
+                // Just only ingore unknow -C* option.
+                continue;
             }
 
             char* value = NULL;
             if (opt->take_value == TRUE) {
                 if (i >= argc-1) {
-                    fprintf(stderr, "ERROR: option %s require param\n", argvi_copy);
-                    usage();
+                    fprintf(stderr, "ERROR: Option %s requires a parameter\n", argvi_copy);
                     exit(1);
                 }
                 i++;
@@ -170,26 +106,9 @@ void scan_options(struct option_t* option, int argc, char **argv)
                 break;
             case OPT_PORT:
                 if (sscanf(value, "%d", &option->port) != 1) {
-                    fprintf(stderr, "ERROR: port number %s of option %s error\n", value, argvi_copy);
+                    fprintf(stderr, "ERROR: Invalid port number %s of option %s\n", value, argvi_copy);
                     exit(1);
                 }
-                break;
-            case OPT_KILL_SERVER:
-                if (option->restart) {
-                    fprintf(stderr, "ERROR: can't specify both of kill & restart\n");
-                    exit(1);
-                }
-                option->kill = TRUE;
-                break;
-            case OPT_RESTART_SERVER:
-                if (option->kill) {
-                    fprintf(stderr, "ERROR: can't specify both of kill & restart\n");
-                    exit(1);
-                }
-                option->restart = TRUE;
-                break;
-            case OPT_QUIET:
-                option->quiet = TRUE;
                 break;
             case OPT_ENV:
                 assert(opt->take_value == TRUE);
@@ -201,10 +120,6 @@ void scan_options(struct option_t* option, int argc, char **argv)
             case OPT_ENV_EXCLUDE:
                 assert(opt->take_value == TRUE);
                 set_mask_option(option->env_exclude_mask, name, value);
-                break;
-            case OPT_HELP:
-                usage();
-                exit(1);
                 break;
             default:
                 assert(FALSE);
@@ -219,16 +134,5 @@ static void print_mask_option(char ** env_mask)
     for (p = env_mask; p-env_mask < MAX_MASK && *p != NULL; p++) {
         printf("%s ", *p);
     }
-}
-
-void print_client_options(struct option_t *opt)
-{
-    printf("without_invocation_server = %d\n", opt->without_invocation_server);
-    printf("env_include_mask = { ");
-    print_mask_option(opt->env_include_mask);
-    printf("}\n");
-    printf("env_exclude_mask = { ");
-    print_mask_option(opt->env_exclude_mask);
-    printf("}\n");
 }
 
