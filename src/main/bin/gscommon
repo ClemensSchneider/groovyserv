@@ -94,7 +94,7 @@ expand_path() {
     fi
 }
 
-function escape_only_value() {
+escape_only_value() {
     local target="$1"
     local firstchar=`echo "$target" | sed -e 's/^\(.\).*$/\1/' 2>/dev/null`
     if [ "$firstchar" = "-" ]; then

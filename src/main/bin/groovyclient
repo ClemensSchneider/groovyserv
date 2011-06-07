@@ -27,7 +27,7 @@ QUIET=false
 # Local helper function
 # ------------------------------------------
 
-function usage() {
+usage() {
     cat << EOS_usage
 usage: `basename $0` -C[option for groovyclient] [args/options for groovy]
 options:
@@ -45,7 +45,7 @@ options:
 EOS_usage
 }
 
-function call_groovyserver() {
+call_groovyserver() {
     info_log "Invoking server: $GROOVYSERVER_BIN $@"
     "$GROOVYSERVER_BIN" "$@"
     if [ ! $? -eq 0 ]; then
