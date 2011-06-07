@@ -128,11 +128,3 @@ void scan_options(struct option_t* option, int argc, char **argv)
     }
 }
 
-static void print_mask_option(char ** env_mask)
-{
-    char** p;
-    for (p = env_mask; p-env_mask < MAX_MASK && *p != NULL; p++) {
-        printf("%s ", *p);
-    }
-}
-
