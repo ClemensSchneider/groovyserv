@@ -20,7 +20,7 @@
 # ------------------------------------------
 
 QUIET=true
-. `dirname $0`/gscommon
+. `dirname $0`/gscommon  # FIXME expand?
 QUIET=false
 
 # ------------------------------------------
@@ -46,6 +46,14 @@ EOS_usage
 }
 
 call_groovyserver() {
+    # Find groovyserver command
+    GROOVYSERVER_BIN="$GROOVYSERV_HOME/bin/groovyserver"
+    if [ ! -x "$GROOVYSERVER_BIN" ]; then
+        error_log "ERROR: Not found a groovyserver command in GROOVYSERV_HOME: $GROOVYSERVER_BIN"
+        exit 1
+    fi
+
+    # Invoking groovyserver
     info_log "Invoking server: $GROOVYSERVER_BIN $@"
     "$GROOVYSERVER_BIN" "$@"
     if [ ! $? -eq 0 ]; then
@@ -60,6 +68,8 @@ call_groovyserver() {
 
 for arg in "$@" ; do
     case "$arg" in
+        # Unused -C* options are passed to the gsconnector,
+        # and then they are used or ignored appropriately.
         -Ch | -Chelp)
             usage
             exit 1
@@ -82,10 +92,6 @@ for arg in "$@" ; do
             GROOVYSERVER_ARGS="$GROOVYSERVER_ARGS -r"
             GROOVYSERVER_RESTART=true
             ;;
-        *)
-            # Unused -C* options are passed to the gsconnector,
-            # and then they are used or ignored appropriately.
-            ;;
     esac
 done
 
@@ -93,11 +99,11 @@ done
 # Control groovyserver
 # ------------------------------------------
 
-if [ $GROOVYSERVER_KILL ]; then
+if [ "$GROOVYSERVER_KILL" = "true" ]; then
     call_groovyserver $GROOVYSERVER_ARGS
     exit 0
 
-elif [ $GROOVYSERVER_RESTART ]; then
+elif [ "$GROOVYSERVER_RESTART" = "true" ]; then
     call_groovyserver $GROOVYSERVER_ARGS
 
 else
@@ -123,5 +129,5 @@ GROOVYSERV_COOKIE=`cat $GROOVYSERV_COOKIE_FILE`
 #-------------------------------------------
 
 export GROOVYSERV_COOKIE="$GROOVYSERV_COOKIE"
-"$GSCONNECTOR_BIN" "$@"
+exec "$GSCONNECTOR_BIN" "$@"
 

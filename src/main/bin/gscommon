@@ -94,26 +94,9 @@ expand_path() {
     fi
 }
 
-#-------------------------------------------
-# Find groovy command
-#-------------------------------------------
-
-if [ "$GROOVY_HOME" != "" ]; then
-    info_log "Groovy home directory: $GROOVY_HOME"
-    GROOVY_BIN="$GROOVY_HOME/bin/groovy"
-    if [ ! -x "$GROOVY_BIN" ]; then
-        error_log "ERROR: Not found a groovy command in GROOVY_HOME: $GROOVY_BIN"
-        exit 1
-    fi
-    info_log "Groovy command path: $GROOVY_BIN (found at GROOVY_HOME)"
-elif which groovy >/dev/null 2>&1; then
-    info_log "Groovy home directory: (none)"
-    GROOVY_BIN=`which groovy`
-    info_log "Groovy command path: $GROOVY_BIN (found at PATH)"
-else
-    error_log "ERROR: Not found a groovy command. Required either PATH having groovy command or GROOVY_HOME"
-    exit 1
-fi
+first_char() {
+   echo "$target" | cut -c 1 2> /dev/null
+}
 
 #-------------------------------------------
 # Resolve GROOVYSERV_HOME
@@ -134,27 +117,7 @@ if [ ! $? -eq 0 ]; then
     error_log "ERROR: Not found a valid GROOVYSERV_HOME directory: $GROOVYSERV_HOME"
     exit 1
 fi
-info_log "GroovyServ home directory: $GROOVYSERV_HOME"
-
-#-------------------------------------------
-# Find groovyserver command
-#-------------------------------------------
-
-GROOVYSERVER_BIN="$GROOVYSERV_HOME/bin/groovyserver"
-if [ ! -x "$GROOVYSERVER_BIN" ]; then
-    error_log "ERROR: Not found a groovyserver command in GROOVYSERV_HOME: $GROOVYSERVER_BIN"
-    exit 1
-fi
-
-#-------------------------------------------
-# Find groovyclient command
-#-------------------------------------------
-
-GROOVYCLIENT_BIN="$GROOVYSERV_HOME/bin/groovyclient"
-if [ ! -x "$GROOVYCLIENT_BIN" ]; then
-    error_log "ERROR: Not found a groovyclient command in GROOVYSERV_HOME: $GROOVYCLIENT_BIN"
-    exit 1
-fi
+info_log "Groovyserv home directory: $GROOVYSERV_HOME"
 
 #-------------------------------------------
 # Find gsconnector command
@@ -165,26 +128,22 @@ if [ ! -x "$GSCONNECTOR_BIN" ]; then
     error_log "ERROR: Not found a gsconnector command in GROOVYSERV_HOME: $GSCONNECTOR_BIN"
     exit 1
 fi
-GROOVYCLIENTAGENT_BIN="$GROOVYSERV_HOME/bin/groovyclient"
 
 # ------------------------------------------
-# GroovyServ's work directory
+# Groovyserv's work directory
 # ------------------------------------------
 
 GROOVYSERV_WORK_DIR="$HOME/.groovy/groovyserv"
 if [ ! -d "$GROOVYSERV_WORK_DIR" ]; then
     mkdir -p "$GROOVYSERV_WORK_DIR"
 fi
-info_log "GroovyServ work directory: $GROOVYSERV_WORK_DIR"
+info_log "Groovyserv work directory: $GROOVYSERV_WORK_DIR"
 
 #-------------------------------------------
-# Port and PID and Cookie
+# Port and cookie
 #-------------------------------------------
 
 PORT=${GROOVYSERVER_PORT:-1961}
-GROOVYSERV_OPTS="$GROOVYSERV_OPTS -Dgroovyserver.port=$PORT"
-GROOVYSERV_PID_FILE="$GROOVYSERV_WORK_DIR/pid-$PORT"
 IS_SERVER_AVAILABLE="env GROOVYSERVER_PORT=$PORT $GSCONNECTOR_BIN -Cwithout-invoking-server"
-EXPIRED_PID_FILE="( cd \"$GROOVYSERV_WORK_DIR\" && find . -name pid-$PORT -mmin +1 )"
 GROOVYSERV_COOKIE_FILE="$GROOVYSERV_WORK_DIR/cookie-$PORT"
 

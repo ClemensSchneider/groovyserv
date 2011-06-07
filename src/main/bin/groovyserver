@@ -51,11 +51,11 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         -k)
-            DO_KILL=KILL_ONLY
+            DO_KILL=${DOKILL:-KILL_ONLY}
             shift
             ;;
         -r)
-            DO_KILL=RESTART
+            DO_KILL=${DOKILL:-RESTART}
             shift
             ;;
         *)
@@ -69,7 +69,38 @@ done
 # Common preparation
 #-------------------------------------------
 
-. `dirname $0`/gscommon
+. `dirname $0`/gscommon  # FIXME expand?
+
+#-------------------------------------------
+# Find groovy command
+#-------------------------------------------
+
+if [ "$GROOVY_HOME" != "" ]; then
+    info_log "Groovy home directory: $GROOVY_HOME"
+    GROOVY_BIN="$GROOVY_HOME/bin/groovy"
+    if [ ! -x "$GROOVY_BIN" ]; then
+        error_log "ERROR: Not found a groovy command in GROOVY_HOME: $GROOVY_BIN"
+        exit 1
+    fi
+    info_log "Groovy command path: $GROOVY_BIN (found at GROOVY_HOME)"
+elif which groovy >/dev/null 2>&1; then
+    info_log "Groovy home directory: (none)"
+    GROOVY_BIN=`which groovy`
+    info_log "Groovy command path: $GROOVY_BIN (found at PATH)"
+else
+    error_log "ERROR: Not found a groovy command. Required either PATH having groovy command or GROOVY_HOME"
+    exit 1
+fi
+
+#-------------------------------------------
+# Find groovyclient command
+#-------------------------------------------
+
+GROOVYCLIENT_BIN="$GROOVYSERV_HOME/bin/groovyclient"
+if [ ! -x "$GROOVYCLIENT_BIN" ]; then
+    error_log "ERROR: Not found a groovyclient command in GROOVYSERV_HOME: $GROOVYCLIENT_BIN"
+    exit 1
+fi
 
 #-------------------------------------------
 # Setup classpath for groovyserver
@@ -94,6 +125,7 @@ export JAVA_OPTS="$JAVA_OPTS -server"
 # Kill process if specified
 #-------------------------------------------
 
+GROOVYSERV_PID_FILE="$GROOVYSERV_WORK_DIR/pid-$PORT"
 if [ "$DO_KILL" != "" ]; then
     if [ -f "$GROOVYSERV_PID_FILE" ]; then
         EXISTED_PID=`cat "$GROOVYSERV_PID_FILE"`
@@ -140,6 +172,7 @@ fi
 # Invoke server
 #-------------------------------------------
 
+GROOVYSERV_OPTS="$GROOVYSERV_OPTS -Dgroovyserver.port=$PORT"
 if [ "$DEBUG" != "" ]; then
     echo "Invoking server for DEBUG..."
     echo "$GROOVY_BIN" $GROOVYSERV_OPTS -e "org.jggug.kobo.groovyserv.GroovyServer.main(args)"
@@ -191,6 +224,7 @@ while true; do
     fi
 
     # if PID file was expired while to connect to server is failing, error
+    EXPIRED_PID_FILE="( cd \"$GROOVYSERV_WORK_DIR\" && find . -name pid-$PORT -mmin +1 )"
     if [ "`sh -c \"$EXPIRED_PID_FILE\"`" != "" ]; then
         error_log "ERROR: Timeout. Confirm if groovyserver $PID($PORT) is running."
         exit 1
