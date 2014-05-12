@@ -20,6 +20,7 @@ import org.jggug.kobo.groovyserv.exception.GServInterruptedException
 import org.jggug.kobo.groovyserv.utils.DebugUtils
 import org.jggug.kobo.groovyserv.utils.IOUtils
 
+import java.nio.channels.IllegalSelectorException;
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Future
 import java.util.concurrent.FutureTask
@@ -40,6 +41,7 @@ class RequestWorker extends ThreadPoolExecutor {
 
     private String id
     private ClientConnection conn
+    private final ThreadGroup rootThreadGroup 
     private Future invokeFuture
     private Future streamFuture
 
@@ -48,7 +50,7 @@ class RequestWorker extends ThreadPoolExecutor {
         super(POOL_SIZE, POOL_SIZE, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>())
         this.id = "RequestWorker:${socket.port}"
 
-        def rootThreadGroup = new GServThreadGroup("GServThreadGroup:${socket.port}")
+        this.rootThreadGroup = new GServThreadGroup("GServThreadGroup:${socket.port}")
         this.conn = new ClientConnection(authToken, socket, rootThreadGroup)
 
         // for management sub threads in invoke handler.
@@ -144,6 +146,11 @@ class RequestWorker extends ThreadPoolExecutor {
         }
         IOUtils.close(conn)
         conn = null
+        try {
+            rootThreadGroup.destroy()
+        } catch (Exception e) {
+            DebugUtils.errorLog("${id}: Failed to destroy thread group", e)
+        }
         DebugUtils.verboseLog("${id}: Closed safely: ${exitStatus}: ${message}")
     }
 
